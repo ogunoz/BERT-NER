@@ -1,9 +1,12 @@
 #! usr/bin/env python3
 # -*- coding:utf-8 -*-
 """
+# NER tagger updated for TERM labeling task
+
 # Copyright 2018 The Google AI Language Team Authors.
 # Copyright 2019 The BioNLP-HZAU Kaiyin Zhou
-# Time:2019/04/08
+
+# Time:2020/09/17
 """
 
 from __future__ import absolute_import
@@ -190,7 +193,10 @@ class DataProcessor(object):
             word = line.strip().split(' ')[0]
             label = line.strip().split(' ')[-1]
             # here we dont do "DOCSTART" check
-            if len(line.strip())==0 and words[-1] == '.':
+            #if len(line.strip())==0:
+            #    print("asd")
+            #if len(line.strip())==0 and words[-1] == '.':
+            if len(line.strip()) == 0:
                 l = ' '.join([label for label in labels if len(label) > 0])
                 w = ' '.join([word for word in words if len(word) > 0])
                 lines.append((l,w))
@@ -201,7 +207,7 @@ class DataProcessor(object):
         rf.close()
         return lines
 
-class NerProcessor(DataProcessor):
+class TermProcessor(DataProcessor):
     def get_train_examples(self, data_dir):
         return self._create_example(
             self._read_data(os.path.join(data_dir, "train.txt")), "train"
@@ -224,11 +230,13 @@ class NerProcessor(DataProcessor):
         "[PAD]" for padding
         :return:
         """
-        return ["[PAD]","B-MISC", "I-MISC", "O", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC", "X","[CLS]","[SEP]"]
+        #return ["[PAD]","B-MISC", "I-MISC", "O", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC", "X","[CLS]","[SEP]"]
+        return ["[PAD]","B-TERM", "O", "X", "[CLS]", "[SEP]"]
 
     def _create_example(self, lines, set_type):
         examples = []
         for (i, line) in enumerate(lines):
+            
             guid = "%s-%s" % (set_type, i)
             texts = tokenization.convert_to_unicode(line[1])
             labels = tokenization.convert_to_unicode(line[0])
@@ -527,6 +535,10 @@ def _write_base(batch_tokens,id2label,prediction,batch_labels,wf,i):
     token = batch_tokens[i]
     predict = id2label[prediction]
     true_l = id2label[batch_labels[i]]
+    
+    if i != 0 and token=="[CLS]":
+        wf.write("\n")
+    
     if token!="[PAD]" and token!="[CLS]" and true_l!="X":
         #
         if predict=="X" and not predict.startswith("##"):
@@ -552,9 +564,9 @@ def Writer(output_predict_file,result,batch_tokens,batch_labels,id2label):
 
 def main(_):
     logging.set_verbosity(logging.INFO)
-    processors = {"ner": NerProcessor}
-    if not FLAGS.do_train and not FLAGS.do_eval:
-        raise ValueError("At least one of `do_train` or `do_eval` must be True.")
+    processors = {"term": TermProcessor}
+    if not FLAGS.do_train and not FLAGS.do_eval and not FLAGS.do_predict:
+        raise ValueError("At least one of `do_train`, `do_eval` or 'do_predict'must be True.")
     bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
     if FLAGS.max_seq_length > bert_config.max_position_embeddings:
         raise ValueError(
@@ -667,6 +679,7 @@ def main(_):
         batch_tokens,batch_labels = filed_based_convert_examples_to_features(predict_examples, label_list,
                                                  FLAGS.max_seq_length, tokenizer,
                                                  predict_file)
+        
 
         logging.info("***** Running prediction*****")
         logging.info("  Num examples = %d", len(predict_examples))
@@ -683,6 +696,7 @@ def main(_):
         #here if the tag is "X" means it belong to its before token, here for convenient evaluate use
         # conlleval.pl we  discarding it directly
         Writer(output_predict_file,result,batch_tokens,batch_labels,id2label)
+        
 
 
 if __name__ == "__main__":
